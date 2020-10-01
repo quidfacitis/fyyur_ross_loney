@@ -10,7 +10,8 @@
 			<p class="subtitle" style="margin-right: 1rem;">
 				ID: {{ venue.id }}
 			</p>
-			<button id="delete-venue" data-id="{{ venue.id }}" class="btn btn-danger btn-sm">Delete</button>
+			<button id="delete-venue" data-id="{{ venue.id }}" class="btn btn-danger btn-sm" style="margin-right: 1rem;">Delete</button>
+			<a href="/venues/{{ venue.id }}/edit"><button class="btn btn-warning btn-sm">Edit</button></a>
 		</div>
 		<div class="genres">
 			{% for genre in venue.genres %}
