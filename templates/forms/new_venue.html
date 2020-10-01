@@ -33,6 +33,10 @@
         {{ form.genres(class_ = 'form-control', autofocus = true) }}
       </div>
       <div class="form-group">
+          <label for="website">Website</label>
+          {{ form.website(class_ = 'form-control', placeholder='http://', autofocus = true) }}
+      </div>
+      <div class="form-group">
           <label for="facebook_link">Facebook Link</label>
           {{ form.facebook_link(class_ = 'form-control', placeholder='http://', autofocus = true) }}
       </div>
@@ -41,8 +45,9 @@
           {{ form.image_link(class_ = 'form-control', placeholder='http://', autofocus = true) }}
       </div>
       <div class="form-group">
-        <label for="seeking_talent">Seeking Talent? <span>{{ form.seeking_talent(class_ = 'form-control',  autofocus = true) }}</span>
-        </label>
+        <div style="display: flex;">
+            <label for="seeking_talent">Seeking Talent?</label> <span style="width:18px; height: 18px; margin-top:-11px; margin-left: 10px;">{{ form.seeking_talent(class_ = 'form-control',  autofocus = true) }}</span>
+        </div>
       </div>
       <div class="form-group">
           <label for="seeking_description">Seeking Description</label>

@@ -42,7 +42,11 @@ class Venue(db.Model):
     phone = db.Column(db.String(120))
     image_link = db.Column(db.String(500))
     facebook_link = db.Column(db.String(120))
+    website = db.Column(db.String(200))
+    seeking_talent = db.Column(db.Boolean, default=False)
+    seeking_description = db.Column(db.String(500))
     genres = db.relationship('Venuegenres', cascade='all, delete-orphan', backref='venue', lazy=True)
+    citystate_id = db.Column(db.Integer, db.ForeignKey('citystate.id'), nullable=False)
 
     # TODO: implement any missing fields, as a database migration using Flask-Migrate
 
@@ -51,6 +55,14 @@ class Venuegenres(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     genre = db.Column(db.String(), nullable=False)
     venue_id = db.Column(db.Integer, db.ForeignKey('Venue.id'), nullable=False)
+
+class Citystate(db.Model):
+    __tablename__ = 'citystate'
+    id = db.Column(db.Integer, primary_key=True)
+    city = db.Column(db.String(), nullable=False)
+    state = db.Column(db.String(), nullable=False)
+    venues = db.relationship('Venue', cascade='all, delete-orphan', backref='citystate', lazy=True)
+
 
 class Artist(db.Model):
     __tablename__ = 'Artist'
@@ -98,43 +110,71 @@ def index():
 def venues():
   # TODO: replace with real venues data.
   #       num_shows should be aggregated based on number of upcoming shows per venue.
-  data=[{
-    "city": "San Francisco",
-    "state": "CA",
-    "venues": [{
-      "id": 1,
-      "name": "The Musical Hop",
-      "num_upcoming_shows": 0,
-    }, {
-      "id": 3,
-      "name": "Park Square Live Music & Coffee",
-      "num_upcoming_shows": 1,
-    }]
-  }, {
-    "city": "New York",
-    "state": "NY",
-    "venues": [{
-      "id": 2,
-      "name": "The Dueling Pianos Bar",
-      "num_upcoming_shows": 0,
-    }]
-  }]
+  cs = Citystate.query.order_by('state').all() # order alphabetically by state
+  data = [] # list of all venues by city-state
+
+  for i in range(0, len(cs)):
+      venues = []
+      for j in range(0, len(cs[i].venues)):
+          venues.append({
+            "id": cs[i].venues[j].id,
+            "name": cs[i].venues[j].name,
+            "num_upcoming_shows": 0 # UPDATE LATER USING SHOWS MODEL
+          })
+      if len(venues) > 0:
+          data.append({
+            "city": cs[i].city,
+            "state": cs[i].state,
+            "venues": venues
+          })
+
+
+  # data=[{
+  #   "city": "San Francisco",
+  #   "state": "CA",
+  #   "venues": [{
+  #     "id": 1,
+  #     "name": "The Musical Hop",
+  #     "num_upcoming_shows": 0,
+  #   }, {
+  #     "id": 3,
+  #     "name": "Park Square Live Music & Coffee",
+  #     "num_upcoming_shows": 1,
+  #   }]
+  # }, {
+  #   "city": "New York",
+  #   "state": "NY",
+  #   "venues": [{
+  #     "id": 2,
+  #     "name": "The Dueling Pianos Bar",
+  #     "num_upcoming_shows": 0,
+  #   }]
+  # }]
   return render_template('pages/venues.html', areas=data);
 
 @app.route('/venues/search', methods=['POST'])
 def search_venues():
+    search_term = request.form.get('search_term')
+    venues = Venue.query.filter(Venue.name.ilike(f"%{search_term}%")).all() # ilike = case-insensitive
+    print(f"SEARCH TERM IS {search_term}")
+    print(venues)
   # TODO: implement search on artists with partial string search. Ensure it is case-insensitive.
   # seach for Hop should return "The Musical Hop".
   # search for "Music" should return "The Musical Hop" and "Park Square Live Music & Coffee"
-  response={
-    "count": 1,
-    "data": [{
-      "id": 2,
-      "name": "The Dueling Pianos Bar",
-      "num_upcoming_shows": 0,
-    }]
-  }
-  return render_template('pages/search_venues.html', results=response, search_term=request.form.get('search_term', ''))
+    data = []
+    for i in range(0, len(venues)):
+        v = venues[i]
+        data.append({
+            "id": v.id,
+            "name": v.name,
+            "num_upcoming_shows": 0 # UPDATE LATER
+        })
+    print(data)
+    response = {
+        "count": len(data),
+        "data": data
+    }
+    return render_template('pages/search_venues.html', results=response, search_term=request.form.get('search_term', ''))
 
 @app.route('/venues/<int:venue_id>')
 def show_venue(venue_id):
@@ -155,11 +195,11 @@ def show_venue(venue_id):
     "city": v.city,
     "state": v.state,
     "phone": v.phone,
-    "website": "https://www.themusicalhop.com", #update
-    "facebook_link": "https://www.facebook.com/TheMusicalHop",
-    "seeking_talent": True, #update
-    "seeking_description": "We are on the lookout for a local artist to play every two weeks. Please call us.", #update
-    "image_link": "https://images.unsplash.com/photo-1543900694-133f37abaaa5?ixlib=rb-1.2.1&ixid=eyJhcHBfaWQiOjEyMDd9&auto=format&fit=crop&w=400&q=60", #update
+    "website": v.website,
+    "facebook_link": v.facebook_link,
+    "seeking_talent": v.seeking_talent,
+    "seeking_description": v.seeking_description,
+    "image_link": v.image_link,
     "past_shows": [{ #update
       "artist_id": 4,
       "artist_name": "Guns N Petals",
@@ -263,30 +303,35 @@ def create_venue_form():
 def create_venue_submission():
     f = request.form
     print(request.form)
+    seeking_talent = False;
+
     if 'seeking_talent' in f:
-        print('SEEKING TALENT == TRUE')
-    else:
-        print('SEEKING TALENT == FALSE')
-    
-    # genres = request.form.getlist('genres')
-    # for g in genres:
-    #     print(g)
-    # try:
-    #     venue = Venue(name=f['name'], city=f['city'], state=f['state'], address=f['address'], phone=f['phone'], facebook_link=f['facebook_link'])
-    #     db.session.add(venue)
-    #     db.session.flush() # this gives you access to venue.id
-    #     venue_id = venue.id
-    #     for g in genres:
-    #         new_genre = Venuegenres(genre=g, venue_id=venue_id)
-    #         db.session.add(new_genre)
-    #         db.session.flush()
-    #     db.session.commit()
-    #     flash('Venue ' + f['name'] + ' was successfully listed!')
-    # except:
-    #     db.session.rollback()
-    #     flash('An error occurred. Venue ' + f['name'] + ' could not be listed.')
-    # finally:
-    #     db.session.close()
+        seeking_talent = True;
+
+    genres = request.form.getlist('genres')
+
+    try:
+        citystate = Citystate.query.filter_by(city=f['city'], state=f['state']).first()
+        if citystate == None:
+            citystate = Citystate(city=f['city'], state=f['state'])
+            db.session.add(citystate)
+            db.session.flush() # this gives you citystate.id
+            print("NEW CITY-STATE ID: ", citystate.id)
+        venue = Venue(name=f['name'], city=f['city'], state=f['state'], address=f['address'], phone=f['phone'], facebook_link=f['facebook_link'], image_link=f['image_link'], website=f['website'], seeking_description=f['seeking_description'], seeking_talent=seeking_talent, citystate_id=citystate.id)
+        db.session.add(venue)
+        db.session.flush() # this gives you access to venue.id
+        venue_id = venue.id
+        for g in genres:
+            new_genre = Venuegenres(genre=g, venue_id=venue_id)
+            db.session.add(new_genre)
+            db.session.flush()
+        db.session.commit()
+        flash('Venue ' + f['name'] + ' was successfully listed!')
+    except:
+        db.session.rollback()
+        flash('An error occurred. Venue ' + f['name'] + ' could not be listed.')
+    finally:
+        db.session.close()
     return render_template('pages/home.html')
 
   # TODO: insert form data as a new Venue record in the db, instead
@@ -301,12 +346,24 @@ def create_venue_submission():
 
 @app.route('/venues/<venue_id>', methods=['DELETE'])
 def delete_venue(venue_id):
+    try:
+        venue = Venue.query.get(venue_id)
+        db.session.delete(venue)
+        db.session.commit()
+        flash('Venue ' + venue.name + ' was successfully deleted!')
+    except:
+        db.session.rollback()
+        flash('An error occurred. Venue ' + venue.name + ' could not be deleted.')
+    finally:
+        db.session.close()
+    return redirect(url_for('index'))
+
   # TODO: Complete this endpoint for taking a venue_id, and using
   # SQLAlchemy ORM to delete a record. Handle cases where the session commit could fail.
 
   # BONUS CHALLENGE: Implement a button to delete a Venue on a Venue Page, have it so that
   # clicking that button delete it from the db then redirect the user to the homepage
-  return None
+  # return None
 
 #  Artists
 #  ----------------------------------------------------------------

@@ -116,6 +116,9 @@ class VenueForm(Form):
     facebook_link = StringField(
         'facebook_link', validators=[URL()]
     )
+    website = StringField(
+        'website', validators=[URL()]
+    )
     seeking_talent = BooleanField(
         'seeking_talent', default=False
     )
