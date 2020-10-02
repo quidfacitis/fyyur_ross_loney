@@ -77,4 +77,19 @@
 	</div>
 </section>
 
+<script>
+// DELETE ARTIST
+  const deleteButton = document.getElementById('delete-artist');
+	deleteButton.onclick = function(e) {
+		const artistId = e.target.dataset['id'];
+		fetch('/artists/' + artistId, {
+			method: 'DELETE'
+		}).then(response => {
+      if (response.redirected) {
+          window.location.href = response.url;
+      }
+    });
+	}
+</script>
+
 {% endblock %}

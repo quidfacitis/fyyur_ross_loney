@@ -286,14 +286,7 @@ def search_artists():
       "count": len(data),
       "data": data
   }
-  # response={
-  #   "count": 1,
-  #   "data": [{
-  #     "id": 4,
-  #     "name": "Guns N Petals",
-  #     "num_upcoming_shows": 0,
-  #   }]
-  # }
+
   return render_template('pages/search_artists.html', results=response, search_term=request.form.get('search_term', ''))
 
 @app.route('/artists/<int:artist_id>')
@@ -539,6 +532,19 @@ def create_artist_submission():
 
     return render_template('pages/home.html')
 
+@app.route('/artists/<artist_id>', methods=['DELETE'])
+def delete_artist(artist_id):
+    try:
+        artist = Artist.query.get(artist_id)
+        db.session.delete(artist)
+        db.session.commit()
+        flash('Artist ' + artist.name + ' was successfully deleted!')
+    except:
+        db.session.rollback()
+        flash('An error occurred. Artist ' + artist.name + ' could not be deleted.')
+    finally:
+        db.session.close()
+    return redirect(url_for('index'))
 
 #  Shows
 #  ----------------------------------------------------------------
