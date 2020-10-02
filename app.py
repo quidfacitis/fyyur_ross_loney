@@ -256,17 +256,14 @@ def delete_venue(venue_id):
 #  ----------------------------------------------------------------
 @app.route('/artists')
 def artists():
-  # TODO: replace with real data returned from querying the database
-  data=[{
-    "id": 4,
-    "name": "Guns N Petals",
-  }, {
-    "id": 5,
-    "name": "Matt Quevedo",
-  }, {
-    "id": 6,
-    "name": "The Wild Sax Band",
-  }]
+  a = Artist.query.all()
+  data = []
+  for i in range(0, len(a)):
+      data.append({
+      "id": a[i].id,
+      "name": a[i].name
+      })
+
   return render_template('pages/artists.html', artists=data)
 
 @app.route('/artists/search', methods=['POST'])
@@ -274,14 +271,29 @@ def search_artists():
   # TODO: implement search on artists with partial string search. Ensure it is case-insensitive.
   # seach for "A" should return "Guns N Petals", "Matt Quevado", and "The Wild Sax Band".
   # search for "band" should return "The Wild Sax Band".
-  response={
-    "count": 1,
-    "data": [{
-      "id": 4,
-      "name": "Guns N Petals",
-      "num_upcoming_shows": 0,
-    }]
+
+  search_term = request.form.get('search_term')
+  artists = Artist.query.filter(Artist.name.ilike(f"%{search_term}%")).all() # ilike = case-insensitive
+  data = []
+  for i in range(0, len(artists)):
+      a = artists[i]
+      data.append({
+          "id": a.id,
+          "name": a.name,
+          "num_upcoming_shows": 0 # UPDATE LATER
+      })
+  response = {
+      "count": len(data),
+      "data": data
   }
+  # response={
+  #   "count": 1,
+  #   "data": [{
+  #     "id": 4,
+  #     "name": "Guns N Petals",
+  #     "num_upcoming_shows": 0,
+  #   }]
+  # }
   return render_template('pages/search_artists.html', results=response, search_term=request.form.get('search_term', ''))
 
 @app.route('/artists/<int:artist_id>')
@@ -324,29 +336,78 @@ def show_artist(artist_id):
 #  ----------------------------------------------------------------
 @app.route('/artists/<int:artist_id>/edit', methods=['GET'])
 def edit_artist(artist_id):
-  form = ArtistForm()
-  artist={
-    "id": 4,
-    "name": "Guns N Petals",
-    "genres": ["Rock n Roll"],
-    "city": "San Francisco",
-    "state": "CA",
-    "phone": "326-123-5000",
-    "website": "https://www.gunsnpetalsband.com",
-    "facebook_link": "https://www.facebook.com/GunsNPetals",
-    "seeking_venue": True,
-    "seeking_description": "Looking for shows to perform at in the San Francisco Bay Area!",
-    "image_link": "https://images.unsplash.com/photo-1549213783-8284d0336c4f?ixlib=rb-1.2.1&ixid=eyJhcHBfaWQiOjEyMDd9&auto=format&fit=crop&w=300&q=80"
-  }
-  # TODO: populate form with fields from artist with ID <artist_id>
-  return render_template('forms/edit_artist.html', form=form, artist=artist)
+
+    a = Artist.query.get(artist_id)
+    g =  Artistgenres.query.filter_by(artist_id=artist_id).all()
+    genres = [];
+    for i in range(0, len(g)):
+        genres.append(g[i].genre)
+
+    artist = {
+        "id": a.id,
+        "name": a.name,
+        "genres": genres,
+        "city": a.city,
+        "state": a.state,
+        "phone": a.phone,
+        "website": a.website,
+        "facebook_link": a.facebook_link,
+        "seeking_venue": a.seeking_venue,
+        "seeking_description": a.seeking_description,
+        "image_link": a.image_link
+    }
+
+    form = ArtistForm(data=artist)
+    return render_template('forms/edit_artist.html', form=form, artist=artist)
+
 
 @app.route('/artists/<int:artist_id>/edit', methods=['POST'])
 def edit_artist_submission(artist_id):
   # TODO: take values from the form submitted, and update existing
   # artist record with ID <artist_id> using the new attributes
+    f = request.form
 
-  return redirect(url_for('show_artist', artist_id=artist_id))
+    seeking_venue = False;
+    if 'seeking_venue' in f:
+        seeking_venue = True;
+
+    genres = request.form.getlist('genres')
+
+    artist = Artist.query.get(artist_id)
+
+    try:
+        citystate = Citystate.query.filter_by(city=f['city'], state=f['state']).first()
+        if citystate == None:
+            citystate = Citystate(city=f['city'], state=f['state'])
+            db.session.add(citystate)
+            db.session.flush() # this gives you citystate.id
+            print("NEW CITY-STATE ID: ", citystate.id)
+        artist.name = f['name']
+        artist.city = f['city']
+        artist.state = f['state']
+        artist.phone = f['phone']
+        artist.facebook_link = f['facebook_link']
+        artist.image_link = f['image_link']
+        artist.website = f['website']
+        artist.seeking_description = f['seeking_description']
+        artist.seeking_venue = seeking_venue
+        artist.citystate_id = citystate.id
+
+        db.session.query(Artistgenres).filter_by(artist_id=artist_id).delete()
+
+        for g in genres:
+            new_genre = Artistgenres(genre=g, artist_id=artist_id)
+            db.session.add(new_genre)
+            db.session.flush()
+        db.session.commit()
+        flash('Artist ' + f['name'] + ' was successfully updated!')
+    except:
+        db.session.rollback()
+        flash('An error occurred. Artist ' + f['name'] + ' could not be updated.')
+    finally:
+        db.session.close()
+
+    return redirect(url_for('show_artist', artist_id=artist_id))
 
 @app.route('/venues/<int:venue_id>/edit', methods=['GET'])
 def edit_venue(venue_id):
@@ -378,8 +439,7 @@ def edit_venue(venue_id):
 
 @app.route('/venues/<int:venue_id>/edit', methods=['POST'])
 def edit_venue_submission(venue_id):
-  # TODO: take values from the form submitted, and update existing
-  # venue record with ID <venue_id> using the new attributes
+
     f = request.form
     print(request.form)
 
