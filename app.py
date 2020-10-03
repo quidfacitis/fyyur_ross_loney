@@ -174,6 +174,29 @@ def show_venue(venue_id):
   for i in range(0, len(g)):
       genres.append(g[i].genre)
 
+  past_shows = []
+  upcoming_shows = []
+
+  shows = Show.query.filter_by(venue_id=venue_id).all()
+  current_date = datetime.now()
+  if len(shows) > 0:
+      for i in range(0, len(shows)):
+          artist = Artist.query.get(shows[i].artist_id)
+          if shows[i].start_time > current_date:
+              upcoming_shows.append({
+                "artist_id": shows[i].artist_id,
+                "artist_name": artist.name,
+                "artist_image_link": artist.image_link,
+                "start_time": str(shows[i].start_time)
+              })
+          else:
+              past_shows.append({
+                "artist_id": shows[i].artist_id,
+                "artist_name": artist.name,
+                "artist_image_link": artist.image_link,
+                "start_time": str(shows[i].start_time)
+              })
+
   data = {
     "id": v.id,
     "name": v.name,
@@ -187,15 +210,10 @@ def show_venue(venue_id):
     "seeking_talent": v.seeking_talent,
     "seeking_description": v.seeking_description,
     "image_link": v.image_link,
-    "past_shows": [{ #update
-      "artist_id": 4,
-      "artist_name": "Guns N Petals",
-      "artist_image_link": "https://images.unsplash.com/photo-1549213783-8284d0336c4f?ixlib=rb-1.2.1&ixid=eyJhcHBfaWQiOjEyMDd9&auto=format&fit=crop&w=300&q=80",
-      "start_time": "2019-05-21T21:30:00.000Z"
-      }],
-    "upcoming_shows": [], #update
-    "past_shows_count": 1, #update
-    "upcoming_shows_count": 0, #update
+    "past_shows": past_shows,
+    "upcoming_shows": upcoming_shows,
+    "past_shows_count": len(past_shows),
+    "upcoming_shows_count": len(upcoming_shows),
   }
 
   return render_template('pages/show_venue.html', venue=data)
@@ -304,7 +322,30 @@ def show_artist(artist_id):
     g =  Artistgenres.query.filter_by(artist_id=artist_id).all()
     genres = [];
     for i in range(0, len(g)):
-     genres.append(g[i].genre)
+        genres.append(g[i].genre)
+
+    past_shows = []
+    upcoming_shows = []
+
+    shows = Show.query.filter_by(artist_id=artist_id).all()
+    current_date = datetime.now()
+    if len(shows) > 0:
+        for i in range(0, len(shows)):
+            venue = Venue.query.get(shows[i].venue_id)
+            if shows[i].start_time > current_date:
+                upcoming_shows.append({
+                  "venue_id": shows[i].venue_id,
+                  "venue_name": venue.name,
+                  "venue_image_link": venue.image_link,
+                  "start_time": str(shows[i].start_time)
+                })
+            else:
+                past_shows.append({
+                  "venue_id": shows[i].venue_id,
+                  "venue_name": venue.name,
+                  "venue_image_link": venue.image_link,
+                  "start_time": str(shows[i].start_time)
+                })
 
     data = {
         "id": a.id,
@@ -318,15 +359,10 @@ def show_artist(artist_id):
         "seeking_venue": a.seeking_venue,
         "seeking_description": a.seeking_description,
         "image_link": a.image_link,
-        "past_shows": [{ #update
-           "venue_id": 1,
-           "venue_name": "The Musical Hop",
-           "venue_image_link": "https://images.unsplash.com/photo-1543900694-133f37abaaa5?ixlib=rb-1.2.1&ixid=eyJhcHBfaWQiOjEyMDd9&auto=format&fit=crop&w=400&q=60",
-           "start_time": "2019-05-21T21:30:00.000Z"
-         }],
-        "upcoming_shows": [], #update
-        "past_shows_count": 1, #update
-        "upcoming_shows_count": 0, #update
+        "past_shows": past_shows,
+        "upcoming_shows": upcoming_shows,
+        "past_shows_count": len(past_shows),
+        "upcoming_shows_count": len(upcoming_shows),
     }
 
     return render_template('pages/show_artist.html', artist=data)
@@ -583,10 +619,10 @@ def create_shows():
 
 @app.route('/shows/create', methods=['POST'])
 def create_show_submission():
+     # called to create new shows in the db, upon submitting new show listing form
     f = request.form
 
     try:
-        print('ENTERED TRY BLOCK')
         show = Show(artist_id = f['artist_id'], venue_id = f['venue_id'], start_time = str(f['start_time']))
         db.session.add(show)
         db.session.commit()
@@ -596,14 +632,7 @@ def create_show_submission():
         flash('An error occurred. The show could not be listed.')
     finally:
         db.session.close()
-  # called to create new shows in the db, upon submitting new show listing form
-  # TODO: insert form data as a new Show record in the db, instead
 
-  # on successful db insert, flash success
-  # flash('Show was successfully listed!')
-  # TODO: on unsuccessful db insert, flash an error instead.
-  # e.g., flash('An error occurred. Show could not be listed.')
-  # see: http://flask.pocoo.org/docs/1.0/patterns/flashing/
     return render_template('pages/home.html')
 
 @app.errorhandler(404)
