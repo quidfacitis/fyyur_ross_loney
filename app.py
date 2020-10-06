@@ -23,8 +23,6 @@ moment = Moment(app)
 app.config.from_object('config')
 db = SQLAlchemy(app)
 
-# TODO: connect to a local postgresql database
-
 migrate = Migrate(app, db)
 
 
@@ -116,7 +114,36 @@ app.jinja_env.filters['datetime'] = format_datetime
 
 @app.route('/')
 def index():
-  return render_template('pages/home.html')
+
+    venues = Venue.query.order_by(Venue.id.desc()).limit(5).all()
+    artists = Artist.query.order_by(Artist.id.desc()).limit(5).all()
+
+    recent_venues = []
+    recent_artists = []
+
+    for i in range(0, len(venues)):
+        v = venues[i]
+        recent_venues.append({
+            "venue_id": v.id,
+            "venue_name": v.name,
+            "venue_image_link": v.image_link
+        })
+    for i in range(0, len(artists)):
+        a = artists[i]
+        recent_artists.append({
+            "artist_id": a.id,
+            "artist_name": a.name,
+            "artist_image_link": a.image_link
+        })
+
+    data = {
+        "recent_venues_count": len(recent_venues),
+        "recent_artists_count": len(recent_artists),
+        "recent_venues": recent_venues,
+        "recent_artists": recent_artists
+    }
+
+    return render_template('pages/home.html', data=data)
 
 
 #  Venues
@@ -124,18 +151,23 @@ def index():
 
 @app.route('/venues')
 def venues():
-  # TODO: replace with real venues data.
-  #       num_shows should be aggregated based on number of upcoming shows per venue.
   cs = Citystate.query.order_by('state').all() # order alphabetically by state
   data = [] # list of all venues by city-state
 
   for i in range(0, len(cs)):
       venues = []
       for j in range(0, len(cs[i].venues)):
+          shows = Show.query.filter_by(venue_id=cs[i].venues[j].id).all()
+          current_date = datetime.now()
+          upcoming_shows = 0
+          if len(shows) > 0:
+              for k in range(0, len(shows)):
+                  if shows[k].start_time > current_date:
+                      upcoming_shows += 1
           venues.append({
             "id": cs[i].venues[j].id,
             "name": cs[i].venues[j].name,
-            "num_upcoming_shows": 0 # UPDATE LATER USING SHOWS MODEL
+            "num_upcoming_shows": upcoming_shows
           })
       if len(venues) > 0:
           data.append({
@@ -153,10 +185,17 @@ def search_venues():
     data = []
     for i in range(0, len(venues)):
         v = venues[i]
+        shows = Show.query.filter_by(venue_id=v.id).all()
+        current_date = datetime.now()
+        upcoming_shows = 0
+        if len(shows) > 0:
+            for i in range(0, len(shows)):
+                if shows[i].start_time > current_date:
+                    upcoming_shows += 1
         data.append({
             "id": v.id,
             "name": v.name,
-            "num_upcoming_shows": 0 # UPDATE LATER
+            "num_upcoming_shows": upcoming_shows
         })
     response = {
         "count": len(data),
@@ -292,19 +331,23 @@ def artists():
 
 @app.route('/artists/search', methods=['POST'])
 def search_artists():
-  # TODO: implement search on artists with partial string search. Ensure it is case-insensitive.
-  # seach for "A" should return "Guns N Petals", "Matt Quevado", and "The Wild Sax Band".
-  # search for "band" should return "The Wild Sax Band".
 
   search_term = request.form.get('search_term')
   artists = Artist.query.filter(Artist.name.ilike(f"%{search_term}%")).all() # ilike = case-insensitive
   data = []
   for i in range(0, len(artists)):
       a = artists[i]
+      shows = Show.query.filter_by(artist_id=a.id).all()
+      current_date = datetime.now()
+      upcoming_shows = 0
+      if len(shows) > 0:
+          for i in range(0, len(shows)):
+              if shows[i].start_time > current_date:
+                  upcoming_shows += 1
       data.append({
           "id": a.id,
           "name": a.name,
-          "num_upcoming_shows": 0 # UPDATE LATER
+          "num_upcoming_shows": upcoming_shows
       })
   response = {
       "count": len(data),
@@ -316,7 +359,6 @@ def search_artists():
 @app.route('/artists/<int:artist_id>')
 def show_artist(artist_id):
   # shows the venue page with the given venue_id
-  # TODO: replace with real venue data from the venues table, using venue_id
 
     a = Artist.query.get(artist_id)
     g =  Artistgenres.query.filter_by(artist_id=artist_id).all()
@@ -398,8 +440,6 @@ def edit_artist(artist_id):
 
 @app.route('/artists/<int:artist_id>/edit', methods=['POST'])
 def edit_artist_submission(artist_id):
-  # TODO: take values from the form submitted, and update existing
-  # artist record with ID <artist_id> using the new attributes
     f = request.form
 
     seeking_venue = False;
@@ -537,9 +577,6 @@ def create_artist_form():
 @app.route('/artists/create', methods=['POST'])
 def create_artist_submission():
   # called upon submitting the new artist listing form
-  # TODO: insert form data as a new Venue record in the db, instead
-  # TODO: modify data to be the data object returned from db insertion
-
     f = request.form
 
     seeking_venue = False;
