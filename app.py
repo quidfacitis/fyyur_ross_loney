@@ -78,12 +78,19 @@ class Artist(db.Model):
     seeking_description = db.Column(db.String(500))
     genres = db.relationship('Artistgenres', cascade='all, delete-orphan', backref='artist', lazy=True)
     shows = db.relationship('Show', cascade='all, delete-orphan', backref='artist', lazy=True)
+    days_not_available = db.relationship('Unavailabledays', cascade='all, delete-orphan', backref='artist', lazy=True)
     citystate_id = db.Column(db.Integer, db.ForeignKey('citystate.id'), nullable=False)
 
 class Artistgenres(db.Model):
     __tablename__ = 'artistgenres'
     id = db.Column(db.Integer, primary_key=True)
     genre = db.Column(db.String(), nullable=False)
+    artist_id = db.Column(db.Integer, db.ForeignKey('Artist.id'), nullable=False)
+
+class Unavailabledays(db.Model):
+    __tablename__ = 'unavailabledays'
+    id = db.Column(db.Integer, primary_key=True)
+    day = db.Column(db.String(), nullable=False)
     artist_id = db.Column(db.Integer, db.ForeignKey('Artist.id'), nullable=False)
 
 class Show(db.Model):
@@ -298,7 +305,7 @@ def create_venue_submission():
         flash('An error occurred. Venue ' + f['name'] + ' could not be listed.')
     finally:
         db.session.close()
-    return render_template('pages/home.html')
+    return redirect(url_for('index'))
 
 @app.route('/venues/<venue_id>', methods=['DELETE'])
 def delete_venue(venue_id):
@@ -358,13 +365,21 @@ def search_artists():
 
 @app.route('/artists/<int:artist_id>')
 def show_artist(artist_id):
-  # shows the venue page with the given venue_id
+  # shows the artist page with the given artist_id
 
     a = Artist.query.get(artist_id)
     g =  Artistgenres.query.filter_by(artist_id=artist_id).all()
     genres = [];
     for i in range(0, len(g)):
         genres.append(g[i].genre)
+
+    days_not_available = []
+
+    # ud == "unavailable days"
+    ud = Unavailabledays.query.filter_by(artist_id=artist_id).all()
+    if len(ud) > 0:
+        for i in range(0, len(ud)):
+            days_not_available.append(ud[i].day)
 
     past_shows = []
     upcoming_shows = []
@@ -405,6 +420,7 @@ def show_artist(artist_id):
         "upcoming_shows": upcoming_shows,
         "past_shows_count": len(past_shows),
         "upcoming_shows_count": len(upcoming_shows),
+        "days_not_available": days_not_available,
     }
 
     return render_template('pages/show_artist.html', artist=data)
@@ -420,6 +436,14 @@ def edit_artist(artist_id):
     for i in range(0, len(g)):
         genres.append(g[i].genre)
 
+    days_not_available = []
+
+    # ud == "unavailable days"
+    ud = Unavailabledays.query.filter_by(artist_id=artist_id).all()
+    if len(ud) > 0:
+        for i in range(0, len(ud)):
+            days_not_available.append(ud[i].day)
+
     artist = {
         "id": a.id,
         "name": a.name,
@@ -431,7 +455,8 @@ def edit_artist(artist_id):
         "facebook_link": a.facebook_link,
         "seeking_venue": a.seeking_venue,
         "seeking_description": a.seeking_description,
-        "image_link": a.image_link
+        "image_link": a.image_link,
+        "days_not_available": days_not_available,
     }
 
     form = ArtistForm(data=artist)
@@ -447,7 +472,7 @@ def edit_artist_submission(artist_id):
         seeking_venue = True;
 
     genres = request.form.getlist('genres')
-
+    days_not_available = request.form.getlist('days_not_available')
     artist = Artist.query.get(artist_id)
 
     try:
@@ -456,7 +481,6 @@ def edit_artist_submission(artist_id):
             citystate = Citystate(city=f['city'], state=f['state'])
             db.session.add(citystate)
             db.session.flush() # this gives you citystate.id
-            print("NEW CITY-STATE ID: ", citystate.id)
         artist.name = f['name']
         artist.city = f['city']
         artist.state = f['state']
@@ -474,6 +498,14 @@ def edit_artist_submission(artist_id):
             new_genre = Artistgenres(genre=g, artist_id=artist_id)
             db.session.add(new_genre)
             db.session.flush()
+
+        db.session.query(Unavailabledays).filter_by(artist_id=artist_id).delete()
+
+        for day in days_not_available:
+            new_day = Unavailabledays(day=day, artist_id=artist_id)
+            db.session.add(new_day)
+            db.session.flush()
+
         db.session.commit()
         flash('Artist ' + f['name'] + ' was successfully updated!')
     except:
@@ -532,10 +564,6 @@ def edit_venue_submission(venue_id):
             citystate = Citystate(city=f['city'], state=f['state'])
             db.session.add(citystate)
             db.session.flush() # this gives you citystate.id
-            print("NEW CITY-STATE ID: ", citystate.id)
-        print('MADE IT PAST CITY-STATE QUERY')
-        print('CITYSTATE ID IS ', citystate.id)
-        print('SEEKING_TALENT IS ', seeking_talent)
         venue.name = f['name']
         venue.city = f['city']
         venue.state = f['state']
@@ -549,7 +577,6 @@ def edit_venue_submission(venue_id):
         venue.citystate_id = citystate.id
 
         db.session.query(Venuegenres).filter_by(venue_id=venue_id).delete()
-        print('MADE IT PAST VENUEGENRES DELETE')
 
         for g in genres:
             new_genre = Venuegenres(genre=g, venue_id=venue_id)
@@ -562,7 +589,6 @@ def edit_venue_submission(venue_id):
         flash('An error occurred. Venue ' + f['name'] + ' could not be updated.')
     finally:
         db.session.close()
-
 
     return redirect(url_for('show_venue', venue_id=venue_id))
 
@@ -595,12 +621,18 @@ def create_artist_submission():
             print("NEW CITY-STATE ID: ", citystate.id)
         artist = Artist(name=f['name'], city=f['city'], state=f['state'], phone=f['phone'], facebook_link=f['facebook_link'], image_link=f['image_link'], website=f['website'], seeking_description=f['seeking_description'], seeking_venue=seeking_venue, citystate_id=citystate.id)
         db.session.add(artist)
-        db.session.flush() # this gives you access to venue.id
+        db.session.flush() # this gives you access to artist.id
         artist_id = artist.id
         for g in genres:
             new_genre = Artistgenres(genre=g, artist_id=artist_id)
             db.session.add(new_genre)
             db.session.flush()
+        if 'days_not_available' in f: # add unavailable days to the 'unavailabledays' table
+            unavailabledays = request.form.getlist('days_not_available')
+            for day in unavailabledays:
+                new_day = Unavailabledays(day=day, artist_id=artist_id)
+                db.session.add(new_day)
+                db.session.flush()
         db.session.commit()
         flash('Artist ' + f['name'] + ' was successfully listed!')
     except:
@@ -608,8 +640,7 @@ def create_artist_submission():
         flash('An error occurred. Artist ' + f['name'] + ' could not be listed.')
     finally:
         db.session.close()
-
-    return render_template('pages/home.html')
+    return redirect(url_for('index'))
 
 @app.route('/artists/<artist_id>', methods=['DELETE'])
 def delete_artist(artist_id):
@@ -659,6 +690,22 @@ def create_show_submission():
      # called to create new shows in the db, upon submitting new show listing form
     f = request.form
 
+    datetime_object = datetime.strptime(f['start_time'], '%Y-%m-%d %H:%M:%S')
+    weekdays = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday']
+    weekday = weekdays[datetime_object.weekday()]
+
+    # ud == "unavailable days"
+    ud = Unavailabledays.query.filter_by(artist_id=f['artist_id']).all()
+
+    # Check if show conflicts with artist's availability
+    if len(ud) > 0:
+        ud_artist = []
+        for i in range(0, len(ud)):
+            ud_artist.append(ud[i].day)
+        if weekday in ud_artist:
+            flash('Unable to create show. Artist not available on ' + weekday + 's.')
+            return redirect(url_for('index'))
+
     try:
         show = Show(artist_id = f['artist_id'], venue_id = f['venue_id'], start_time = str(f['start_time']))
         db.session.add(show)
@@ -670,7 +717,7 @@ def create_show_submission():
     finally:
         db.session.close()
 
-    return render_template('pages/home.html')
+    return redirect(url_for('index'))
 
 @app.errorhandler(404)
 def not_found_error(error):

@@ -19,6 +19,14 @@
 			<span class="genre">{{ genre }}</span>
 			{% endfor %}
 		</div>
+		{% if artist.days_not_available %}
+		<div style="display:flex;">
+			Days not available:
+			{% for day in artist.days_not_available %}
+			<span class="badge" style="margin-right: 0.25rem; margin-left: 0.5rem; background-color:  #d9534f;">{{ day }}</span>
+			{% endfor %}
+		</div>
+		{% endif %}
 		<p>
 			<i class="fas fa-globe-americas"></i> {{ artist.city }}, {{ artist.state }}
 		</p>
