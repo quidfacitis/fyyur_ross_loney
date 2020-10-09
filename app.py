@@ -46,6 +46,11 @@ app.jinja_env.filters['datetime'] = format_datetime
 
 @app.route('/')
 def index():
+    """ Fetches the five most recent venues and artists
+
+    Returns:
+        The pages/home.html view with the most recent venues and artists data
+    """
 
     venues = Venue.query.order_by(Venue.id.desc()).limit(5).all()
     artists = Artist.query.order_by(Artist.id.desc()).limit(5).all()
@@ -83,13 +88,20 @@ def index():
 
 @app.route('/venues')
 def venues():
+  """ Organizes venues by city-state, as well as past and upcoming shows for each venue
+
+    Returns:
+        The pages/venues.html view with the organized venue data
+  """
+
   cs = Citystate.query.order_by('state').all() # order alphabetically by state
   data = [] # list of all venues by city-state
 
   for i in range(0, len(cs)):
       venues = []
       for j in range(0, len(cs[i].venues)):
-          shows = Show.query.filter_by(venue_id=cs[i].venues[j].id).all()
+          v = Venue.query.get(cs[i].venues[j].id)
+          shows = v.shows
           current_date = datetime.now()
           upcoming_shows = 0
           if len(shows) > 0:
@@ -97,8 +109,8 @@ def venues():
                   if shows[k].start_time > current_date:
                       upcoming_shows += 1
           venues.append({
-            "id": cs[i].venues[j].id,
-            "name": cs[i].venues[j].name,
+            "id": v.id,
+            "name": v.name,
             "num_upcoming_shows": upcoming_shows
           })
       if len(venues) > 0:
@@ -108,16 +120,21 @@ def venues():
             "venues": venues
           })
 
-  return render_template('pages/venues.html', areas=data);
+  return render_template('pages/venues.html', areas=data)
 
 @app.route('/venues/search', methods=['POST'])
 def search_venues():
+    """ Fetches venues that partially match a case-insensitive search_term from request.form
+
+      Returns:
+          The pages/search_venues.html view with the venue search results data
+    """
     search_term = request.form.get('search_term')
     venues = Venue.query.filter(Venue.name.ilike(f"%{search_term}%")).all() # ilike = case-insensitive
     data = []
     for i in range(0, len(venues)):
         v = venues[i]
-        shows = Show.query.filter_by(venue_id=v.id).all()
+        shows = v.shows
         current_date = datetime.now()
         upcoming_shows = 0
         if len(shows) > 0:
@@ -137,10 +154,17 @@ def search_venues():
 
 @app.route('/venues/<int:venue_id>')
 def show_venue(venue_id):
-  # shows the venue page with the given venue_id
+  """ Fetches a specific venue's data using its ID, as well as its genres and shows.
+    The shows are divided into "past_shows" and "upcoming_shows.""
 
+    Args:
+        venue_id: an integer that acts as the primary key of a specific venue
+
+    Returns:
+        The pages/show_venue.html view with the specific venue data
+  """
   v = Venue.query.get(venue_id)
-  g =  Venuegenres.query.filter_by(venue_id=venue_id).all()
+  g = v.genres
   genres = [];
   for i in range(0, len(g)):
       genres.append(g[i].genre)
@@ -148,11 +172,11 @@ def show_venue(venue_id):
   past_shows = []
   upcoming_shows = []
 
-  shows = Show.query.filter_by(venue_id=venue_id).all()
+  shows = v.shows
   current_date = datetime.now()
   if len(shows) > 0:
       for i in range(0, len(shows)):
-          artist = Artist.query.get(shows[i].artist_id)
+          artist = shows[i].artist
           if shows[i].start_time > current_date:
               upcoming_shows.append({
                 "artist_id": shows[i].artist_id,
@@ -194,13 +218,23 @@ def show_venue(venue_id):
 
 @app.route('/venues/create', methods=['GET'])
 def create_venue_form():
+  """ Fetches the VenueForm
+
+    Returns:
+        The forms/new_venue.html view with VenueForm data
+  """
   form = VenueForm()
   return render_template('forms/new_venue.html', form=form)
 
 @app.route('/venues/create', methods=['POST'])
 def create_venue_submission():
+    """ Creates a new venue, along with its associated genres and, if applicable, a new citystate, and saves them to the database in their respective "Venue," "Venuegenres" and "Citystate" tables.
+
+      Returns:
+          A redirect to the url_for('index')
+    """
     f = request.form
-    print(request.form)
+
     seeking_talent = False;
 
     if 'seeking_talent' in f:
@@ -214,7 +248,6 @@ def create_venue_submission():
             citystate = Citystate(city=f['city'], state=f['state'])
             db.session.add(citystate)
             db.session.flush() # this gives you citystate.id
-            print("NEW CITY-STATE ID: ", citystate.id)
         venue = Venue(name=f['name'], city=f['city'], state=f['state'], address=f['address'], phone=f['phone'], facebook_link=f['facebook_link'], image_link=f['image_link'], website=f['website'], seeking_description=f['seeking_description'], seeking_talent=seeking_talent, citystate_id=citystate.id)
         db.session.add(venue)
         db.session.flush() # this gives you access to venue.id
@@ -234,6 +267,15 @@ def create_venue_submission():
 
 @app.route('/venues/<venue_id>', methods=['DELETE'])
 def delete_venue(venue_id):
+    """ Deletes a specific venue via its ID. Its associated "orphan" shows and genres
+    are also automatically deleted in the database.
+
+      Args:
+          venue_id: an integer that acts as the primary key of a specific venue
+
+      Returns:
+          A redirect to the url_for('index')
+    """
     try:
         venue = Venue.query.get(venue_id)
         db.session.delete(venue)
@@ -251,6 +293,11 @@ def delete_venue(venue_id):
 #  ----------------------------------------------------------------
 @app.route('/artists')
 def artists():
+  """ Fetches all artists and extracts each one's "id" and "name" to be displayed
+
+    Returns:
+        The pages/artists.html view with the artists data
+  """
   a = Artist.query.all()
   data = []
   for i in range(0, len(a)):
@@ -263,13 +310,17 @@ def artists():
 
 @app.route('/artists/search', methods=['POST'])
 def search_artists():
+  """ Fetches artists that partially match a case-insensitive search_term from request.form
 
+    Returns:
+        The pages/search_artists.html view with the artist search results data
+  """
   search_term = request.form.get('search_term')
   artists = Artist.query.filter(Artist.name.ilike(f"%{search_term}%")).all() # ilike = case-insensitive
   data = []
   for i in range(0, len(artists)):
       a = artists[i]
-      shows = Show.query.filter_by(artist_id=a.id).all()
+      shows = a.shows
       current_date = datetime.now()
       upcoming_shows = 0
       if len(shows) > 0:
@@ -290,10 +341,17 @@ def search_artists():
 
 @app.route('/artists/<int:artist_id>')
 def show_artist(artist_id):
-  # shows the artist page with the given artist_id
+    """ Fetches a specific artists's data using its ID, as well as its genres,
+        days_not_available, and shows. The shows are divided into "past_shows" and "upcoming_shows.""
 
+      Args:
+        artist_id: an integer that acts as the primary key of a specific artist
+
+      Returns:
+        The pages/show_artist.html view with the specific artist data
+    """
     a = Artist.query.get(artist_id)
-    g =  Artistgenres.query.filter_by(artist_id=artist_id).all()
+    g = a.genres
     genres = [];
     for i in range(0, len(g)):
         genres.append(g[i].genre)
@@ -301,7 +359,7 @@ def show_artist(artist_id):
     days_not_available = []
 
     # ud == "unavailable days"
-    ud = Unavailabledays.query.filter_by(artist_id=artist_id).all()
+    ud = a.days_not_available
     if len(ud) > 0:
         for i in range(0, len(ud)):
             days_not_available.append(ud[i].day)
@@ -309,11 +367,11 @@ def show_artist(artist_id):
     past_shows = []
     upcoming_shows = []
 
-    shows = Show.query.filter_by(artist_id=artist_id).all()
+    shows = a.shows
     current_date = datetime.now()
     if len(shows) > 0:
         for i in range(0, len(shows)):
-            venue = Venue.query.get(shows[i].venue_id)
+            venue = shows[i].venue
             if shows[i].start_time > current_date:
                 upcoming_shows.append({
                   "venue_id": shows[i].venue_id,
@@ -354,9 +412,17 @@ def show_artist(artist_id):
 #  ----------------------------------------------------------------
 @app.route('/artists/<int:artist_id>/edit', methods=['GET'])
 def edit_artist(artist_id):
+    """Fetches the ArtistForm and populates it with the existing data for the selected artist,
+    which includes the artist's genres and days_not_available.
 
+    Args:
+        artist_id: an integer that acts as the primary key of a specific artist
+
+    Returns:
+        The forms/edit_artist.html view, along with the ArtistForm and the selected artist's data
+    """
     a = Artist.query.get(artist_id)
-    g =  Artistgenres.query.filter_by(artist_id=artist_id).all()
+    g = a.genres
     genres = [];
     for i in range(0, len(g)):
         genres.append(g[i].genre)
@@ -364,7 +430,7 @@ def edit_artist(artist_id):
     days_not_available = []
 
     # ud == "unavailable days"
-    ud = Unavailabledays.query.filter_by(artist_id=artist_id).all()
+    ud = a.days_not_available
     if len(ud) > 0:
         for i in range(0, len(ud)):
             days_not_available.append(ud[i].day)
@@ -390,6 +456,14 @@ def edit_artist(artist_id):
 
 @app.route('/artists/<int:artist_id>/edit', methods=['POST'])
 def edit_artist_submission(artist_id):
+    """Updates a specific artist using their ID, as well as updating the artist's associated genres, days_not_available and city-state.
+
+    Args:
+        artist_id: an integer that acts as the primary key of a specific artist
+
+    Returns:
+        A redirect to the url_for('show_artist'), along with the updated artist's ID
+    """
     f = request.form
 
     seeking_venue = False;
@@ -443,9 +517,17 @@ def edit_artist_submission(artist_id):
 
 @app.route('/venues/<int:venue_id>/edit', methods=['GET'])
 def edit_venue(venue_id):
+    """Fetches the VenueForm and populates it with the existing data for the selected venue,
+    which includes the venue's genres.
 
+    Args:
+        venue_id: an integer that acts as the primary key of a specific venue
+
+    Returns:
+        The forms/edit_venue.html view, along with the VenueForm and the selected venue's data
+    """
     v = Venue.query.get(venue_id)
-    g =  Venuegenres.query.filter_by(venue_id=venue_id).all()
+    g = v.genres
     genres = [];
     for i in range(0, len(g)):
         genres.append(g[i].genre)
@@ -471,9 +553,15 @@ def edit_venue(venue_id):
 
 @app.route('/venues/<int:venue_id>/edit', methods=['POST'])
 def edit_venue_submission(venue_id):
+    """Updates a specific venue using its ID, as well as updating the venues's associated genres and city-state.
 
+    Args:
+        venue_id: an integer that acts as the primary key of a specific venue
+
+    Returns:
+        A redirect to the url_for('show_venue'), along with the updated venue's ID
+    """
     f = request.form
-    print(request.form)
 
     seeking_talent = False;
     if 'seeking_talent' in f:
@@ -522,12 +610,21 @@ def edit_venue_submission(venue_id):
 
 @app.route('/artists/create', methods=['GET'])
 def create_artist_form():
+  """Fetches ArtistForm
+
+  Returns:
+    The forms/new_artist.html view with the ArtistForm data
+  """
   form = ArtistForm()
   return render_template('forms/new_artist.html', form=form)
 
 @app.route('/artists/create', methods=['POST'])
 def create_artist_submission():
-  # called upon submitting the new artist listing form
+    """ Creates a new artist, along with its associated genres, days_not_available, and if applicable, a new citystate, and saves them to the database in their respective "Artiste," "Artistgenres" and "Citystate" tables.
+
+      Returns:
+          A redirect to the url_for('index')
+    """
     f = request.form
 
     seeking_venue = False;
@@ -543,7 +640,6 @@ def create_artist_submission():
             citystate = Citystate(city=f['city'], state=f['state'])
             db.session.add(citystate)
             db.session.flush() # this gives you citystate.id
-            print("NEW CITY-STATE ID: ", citystate.id)
         artist = Artist(name=f['name'], city=f['city'], state=f['state'], phone=f['phone'], facebook_link=f['facebook_link'], image_link=f['image_link'], website=f['website'], seeking_description=f['seeking_description'], seeking_venue=seeking_venue, citystate_id=citystate.id)
         db.session.add(artist)
         db.session.flush() # this gives you access to artist.id
@@ -569,6 +665,15 @@ def create_artist_submission():
 
 @app.route('/artists/<artist_id>', methods=['DELETE'])
 def delete_artist(artist_id):
+    """ Deletes a specific artist via its ID. Its associated "orphan" shows, genres,
+    and days_not_available are also automatically deleted in the database.
+
+      Args:
+          artist_id: an integer that acts as the primary key of a specific artist
+
+      Returns:
+          A redirect to the url_for('index')
+    """
     try:
         artist = Artist.query.get(artist_id)
         db.session.delete(artist)
@@ -586,19 +691,21 @@ def delete_artist(artist_id):
 
 @app.route('/shows')
 def shows():
-     # displays list of shows at /shows
+    """ Fetches all shows and their essential artist and venue information to be displayed
+
+      Returns:
+          The pages/shows.html view with the shows data
+    """
     shows = Show.query.all()
 
     data = []
     for i in range(0, len(shows)):
-        venue_name = Venue.query.get(shows[i].venue_id).name
-        artist = Artist.query.get(shows[i].artist_id)
         data.append({
             "venue_id": shows[i].venue_id,
-            "venue_name": venue_name,
+            "venue_name": shows[i].venue.name,
             "artist_id": shows[i].artist_id,
-            "artist_name": artist.name,
-            "artist_image_link": artist.image_link,
+            "artist_name": shows[i].artist.name,
+            "artist_image_link": shows[i].artist.image_link,
             "start_time": str(shows[i].start_time)
         })
 
@@ -606,21 +713,34 @@ def shows():
 
 @app.route('/shows/create')
 def create_shows():
-  # renders form. do not touch.
+  """Fetches ShowForm
+
+  Returns:
+    The forms/new_show.html view with the ShowForm data
+  """
   form = ShowForm()
   return render_template('forms/new_show.html', form=form)
 
 @app.route('/shows/create', methods=['POST'])
 def create_show_submission():
-     # called to create new shows in the db, upon submitting new show listing form
+    """Creates a new show and adds it to the database. If a show's start_date falls
+    on a day of the week the artist is not available, the show is not created, and an error
+    message is displayed to the user.
+
+    Returns:
+        A redirect to url_for('index')
+    """
+
     f = request.form
 
     datetime_object = datetime.strptime(f['start_time'], '%Y-%m-%d %H:%M:%S')
     weekdays = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday']
     weekday = weekdays[datetime_object.weekday()]
 
+    a = Artist.query.get(f['artist_id'])
+
     # ud == "unavailable days"
-    ud = Unavailabledays.query.filter_by(artist_id=f['artist_id']).all()
+    ud = a.days_not_available
 
     # Check if show conflicts with artist's availability
     if len(ud) > 0:
